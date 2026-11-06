@@ -15,6 +15,7 @@ mod add;
 mod build;
 mod bundle;
 mod completions;
+mod deploy;
 mod dev;
 mod error;
 mod helpers;
@@ -147,6 +148,7 @@ enum Commands {
   Dev(dev::Options),
   Build(build::Options),
   Bundle(bundle::Options),
+  Deploy(deploy::Cli),
   Android(mobile::android::Cli),
   #[cfg(target_os = "macos")]
   Ios(mobile::ios::Cli),
@@ -284,6 +286,7 @@ where
     Commands::Init(options) => init::command(options)?,
     Commands::Plugin(cli) => plugin::command(cli)?,
     Commands::Signer(cli) => signer::command(cli)?,
+    Commands::Deploy(cli) => deploy::command(cli)?,
     Commands::Completions(options) => completions::command(options, cli_)?,
     Commands::Permission(options) => acl::permission::command(options)?,
     Commands::Capability(options) => acl::capability::command(options)?,
