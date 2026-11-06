@@ -25,6 +25,28 @@ pub struct Options {
   /// Play track override (Android only; default from the profile)
   #[clap(long)]
   pub track: Option<String>,
+  /// Play release status: completed (default), draft, halted, or
+  /// inProgress (staged rollout — combine with --user-fraction)
+  #[clap(long, default_value = "completed")]
+  pub release_status: String,
+  /// Staged rollout fraction, 0.0–1.0 (Android, with --release-status inProgress)
+  #[clap(long)]
+  pub user_fraction: Option<f64>,
+  /// Release notes text for the Play listing (Android)
+  #[clap(long)]
+  pub release_notes: Option<String>,
+  /// Locale for the release notes (Android)
+  #[clap(long, default_value = "en-US")]
+  pub locale: String,
+  /// iOS one-shot pipeline: after uploading, wait for App Store Connect
+  /// processing, then assign the build to the profile's group, submit it
+  /// for Beta App Review (with the profile's review details) and print
+  /// the public link. Implies the link step.
+  #[clap(long)]
+  pub wait: bool,
+  /// How long --wait polls processing before giving up (minutes)
+  #[clap(long, default_value_t = 45)]
+  pub timeout_minutes: u64,
   /// After uploading (iOS only), also ensure the profile's external
   /// TestFlight group public link and print it
   #[clap(long)]
@@ -54,7 +76,13 @@ pub fn command(options: Options) -> Result<()> {
         .track
         .clone()
         .unwrap_or_else(|| resolved.android_track(&options.profile));
-      play::submit_aab(&package, &aab, &track)
+      let release = play::ReleaseOptions {
+        status: options.release_status.clone(),
+        user_fraction: options.user_fraction,
+        release_notes: options.release_notes.clone(),
+        locale: options.locale.clone(),
+      };
+      play::submit_aab(&package, &aab, &track, &release)
     }
   }
 }
@@ -88,13 +116,24 @@ fn submit_ios(options: &Options, resolved: &config::Resolved) -> Result<()> {
     ipa.display()
   );
 
-  if options.link {
+  let waited_build_id = if options.wait {
+    let bundle_id = config::require_bundle_id(resolved)?;
+    Some(super::asc::wait_for_newest_valid_build(
+      &bundle_id,
+      options.timeout_minutes,
+    )?)
+  } else {
+    None
+  };
+
+  if options.link || options.wait {
     super::asc::link_command(super::asc::LinkOptions {
       profile: options.profile.clone(),
       group: None,
       limit: None,
-      build_id: None,
-      submit_review: false,
+      build_id: waited_build_id.clone(),
+      latest: waited_build_id.is_none(),
+      submit_review: waited_build_id.is_some(),
       tauri_dir: options.tauri_dir.clone(),
     })?;
   }

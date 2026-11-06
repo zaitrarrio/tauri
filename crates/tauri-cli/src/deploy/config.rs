@@ -57,6 +57,51 @@ pub struct ProfileSubmit {
 pub struct IosSubmit {
   pub group: Option<String>,
   pub public_link_limit: Option<u32>,
+  /// Default "What to Test" text for builds in this profile.
+  pub whats_new: Option<String>,
+  /// Beta App Review contact details. App Store Connect rejects an
+  /// external beta submission without these, so profiles that submit
+  /// externally should fill them in.
+  pub review: Option<ReviewSection>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewSection {
+  pub contact_first_name: Option<String>,
+  pub contact_last_name: Option<String>,
+  pub contact_phone: Option<String>,
+  pub contact_email: Option<String>,
+  pub demo_account_name: Option<String>,
+  pub demo_account_password: Option<String>,
+  pub demo_account_required: Option<bool>,
+  pub notes: Option<String>,
+}
+
+impl ReviewSection {
+  /// App Store Connect `betaAppReviewDetail` attributes.
+  pub fn to_attributes(&self) -> serde_json::Value {
+    let mut attrs = serde_json::Map::new();
+    let mut put = |key: &str, value: &Option<String>| {
+      if let Some(v) = value {
+        attrs.insert(key.to_string(), serde_json::Value::String(v.clone()));
+      }
+    };
+    put("contactFirstName", &self.contact_first_name);
+    put("contactLastName", &self.contact_last_name);
+    put("contactPhone", &self.contact_phone);
+    put("contactEmail", &self.contact_email);
+    put("demoAccountName", &self.demo_account_name);
+    put("demoAccountPassword", &self.demo_account_password);
+    put("notes", &self.notes);
+    if let Some(required) = self.demo_account_required {
+      attrs.insert(
+        "demoAccountRequired".to_string(),
+        serde_json::Value::Bool(required),
+      );
+    }
+    serde_json::Value::Object(attrs)
+  }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -87,6 +132,22 @@ impl Resolved {
           "Preview".to_string()
         }
       })
+  }
+
+  pub fn ios_review(&self, profile: &str) -> Option<&ReviewSection> {
+    self
+      .file
+      .submit
+      .get(profile)
+      .and_then(|p| p.ios.review.as_ref())
+  }
+
+  pub fn ios_whats_new(&self, profile: &str) -> Option<String> {
+    self
+      .file
+      .submit
+      .get(profile)
+      .and_then(|p| p.ios.whats_new.clone())
   }
 
   pub fn ios_public_link_limit(&self, profile: &str) -> Option<u32> {

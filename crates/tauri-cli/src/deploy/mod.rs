@@ -41,9 +41,16 @@ use std::path::PathBuf;
 
 mod asc;
 mod config;
+mod desktop;
+mod doctor;
 mod jwt;
+mod metadata;
 mod play;
+mod release;
+mod scaffold;
+mod share;
 mod submit;
+mod version;
 
 #[derive(Parser)]
 #[clap(
@@ -65,6 +72,21 @@ enum Commands {
   Submit(submit::Options),
   /// Manage TestFlight external beta groups and their public links
   Testflight(TestflightCli),
+  /// Sync store listing text from metadata.json
+  Metadata(metadata::Options),
+  /// Production release operations: App Store review submission,
+  /// Play track promotion, rollout halt/resume
+  Release(release::Cli),
+  /// Get a shareable install link (Android internal app sharing / iOS TestFlight)
+  Share(share::Options),
+  /// Publish desktop updater artifacts and their manifest
+  Desktop(desktop::Options),
+  /// Preflight checks for common store-submission blockers
+  Doctor(doctor::Options),
+  /// Show or set the app version / build number in tauri.conf.json
+  Version(version::Options),
+  /// Scaffold deploy.json, metadata.json, .env.deploy.example and a CI workflow
+  Init(scaffold::Options),
 }
 
 #[derive(Parser)]
@@ -80,6 +102,27 @@ enum TestflightCommands {
   Link(asc::LinkOptions),
   /// List recent App Store Connect builds and beta groups (with public links)
   Status(asc::StatusOptions),
+  /// Apply Beta App Review details + "What to Test" and submit a build for beta review
+  Review(asc::ReviewOptions),
+  /// List or invite beta testers
+  Testers(TestersCli),
+  /// List recent beta feedback submissions (crashes / tester reports)
+  Feedback(asc::FeedbackOptions),
+}
+
+#[derive(Parser)]
+#[clap(subcommand_required(true), arg_required_else_help(true))]
+pub struct TestersCli {
+  #[clap(subcommand)]
+  command: TestersCommands,
+}
+
+#[derive(Subcommand)]
+enum TestersCommands {
+  /// List the app's beta testers
+  List(asc::TestersListOptions),
+  /// Invite a beta tester by email
+  Add(asc::TesterAddOptions),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -95,7 +138,20 @@ pub fn command(cli: Cli) -> Result<()> {
     Commands::Testflight(cli) => match cli.command {
       TestflightCommands::Link(options) => asc::link_command(options),
       TestflightCommands::Status(options) => asc::status_command(options),
+      TestflightCommands::Review(options) => asc::review_command(options),
+      TestflightCommands::Testers(cli) => match cli.command {
+        TestersCommands::List(options) => asc::testers_list_command(options),
+        TestersCommands::Add(options) => asc::tester_add_command(options),
+      },
+      TestflightCommands::Feedback(options) => asc::feedback_command(options),
     },
+    Commands::Metadata(options) => metadata::command(options),
+    Commands::Release(cli) => release::command(cli),
+    Commands::Share(options) => share::command(options),
+    Commands::Desktop(options) => desktop::command(options),
+    Commands::Doctor(options) => doctor::command(options),
+    Commands::Version(options) => version::command(options),
+    Commands::Init(options) => scaffold::command(options),
   }
 }
 
